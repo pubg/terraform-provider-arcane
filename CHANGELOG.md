@@ -1,2 +1,2 @@
 ## Changelog   
-* 9f9c6013d56f0675f4ebec70b8b5f5693bd15438 feat: add docs
+* 12d7da9125c6f8581f31ae7d62c7088c77a7f612 feat: add docs 2
