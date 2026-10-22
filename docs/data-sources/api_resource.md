@@ -41,6 +41,7 @@ data "arcane_api_resources" "role" {
 ### Optional
 
 - `namespace` (String) Namespace of the resource (required for namespaced resources)
+- `kind_plural` (String) Plural API resource name, converted to lowercase. Defaults to the lowercase kind with 's' appended.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
