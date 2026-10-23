@@ -37,13 +37,13 @@ data "arcane_api_resources" "pod" {
 
 ### Optional
 
-- `namespace` (String) Namespace of the resource (optional, if provided lists namespaced resources, otherwise lists cluster resources)
 - `kind_plural` (String) Plural API resource name, converted to lowercase. Defaults to the lowercase kind with 's' appended.
+- `namespace` (String) Namespace of the resource (optional, if provided lists namespaced resources, otherwise lists cluster resources)
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
 
-- `id` (String) The ID of this resource.
+- `id` (String) API path of the resource list
 - `objects` (List of String) List of resource objects as YAML strings
 
 <a id="nestedblock--timeouts"></a>
@@ -51,4 +51,4 @@ data "arcane_api_resources" "pod" {
 
 Optional:
 
-- `default` (String)
+- `read` (String) A string that can be [parsed as a duration](https://pkg.go.dev/time#ParseDuration) consisting of numbers and unit suffixes, such as "30s" or "2h45m". Valid time units are "s" (seconds), "m" (minutes), "h" (hours).
