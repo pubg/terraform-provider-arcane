@@ -3,12 +3,12 @@
 page_title: "arcane_api_resource Resource - terraform-provider-arcane"
 subcategory: ""
 description: |-
-  
+  Manages an Arcane API object from a YAML manifest. The provider adds the app.kubernetes.io/managed-by: terraform label when it creates or updates the object, unless the manifest sets that label.
 ---
 
 # arcane_api_resource (Resource)
 
-
+Manages an Arcane API object from a YAML manifest. The provider adds the `app.kubernetes.io/managed-by: terraform` label when it creates or updates the object, unless the manifest sets that label.
 
 ## Example Usage
 
