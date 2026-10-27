@@ -1,2 +1,2 @@
 ## Changelog   
-* 40b7e1d2d1108dd82a509889cfd5fb8b8ddcab31 feat: arcane-client-go 걷어내기 (!6)
+* e8f7cad28e0eb4c53462ad2511edf2ca2628537f feat: 리소스 복수형을 API Discovery 로 찾도록 변경하고 kind_plural 제거 (!7)

@@ -67,7 +67,6 @@ YAML
 
 ### Optional
 
-- `kind_plural` (String) Plural API resource name, converted to lowercase. Defaults to the lowercase kind with 's' appended.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only

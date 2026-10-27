@@ -37,8 +37,7 @@ data "arcane_api_resources" "pod" {
 
 ### Optional
 
-- `kind_plural` (String) Plural API resource name, converted to lowercase. Defaults to the lowercase kind with 's' appended.
-- `namespace` (String) Namespace of the resource (optional, if provided lists namespaced resources, otherwise lists cluster resources)
+- `namespace` (String) Namespace to list. Omit it for a cluster-scoped kind, or to list a namespaced kind across all namespaces.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 
 ### Read-Only
