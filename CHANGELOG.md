@@ -1,2 +1,2 @@
 ## Changelog   
-* e8f7cad28e0eb4c53462ad2511edf2ca2628537f feat: 리소스 복수형을 API Discovery 로 찾도록 변경하고 kind_plural 제거 (!7)
+* 4f04c4e5f378ab121a081d7be2555ddd1c249612 feat: arcane_api_resource 에 drift 감지·ignore_fields·wait 추가 (!8)
