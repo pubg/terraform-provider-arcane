@@ -8,7 +8,7 @@ description: |-
 
 # arcane_api_resource (Resource)
 
-Manages an Arcane API object from a YAML manifest. The provider adds the `app.kubernetes.io/managed-by: terraform` label when it creates or updates the object, unless the manifest sets that label. When the label is removed on the server, refresh reports it as drift and the next apply puts it back. It does not appear in `desired_object`.
+Manages an Arcane API object from a YAML manifest. The provider adds the `terraform.arcane.pubg.io/managed-by: terraform` label when it creates or updates the object, unless the manifest sets that label. When the label is removed on the server, refresh reports it as drift and the next apply puts it back. It does not appear in `desired_object`. The provider keeps managing the label even when `ignore_fields` covers `metadata.labels`; list the label's own path, `metadata.labels["terraform.arcane.pubg.io/managed-by"]`, in `ignore_fields` to leave it alone.
 
 `manifest` is always sensitive, so plans show manifest changes in `desired_object`, where secret fields read `******`. Secret fields are the fields the API server reports as encrypted through API discovery, plus `sensitive_fields` for secret fields the server does not know about. `object` is what the server actually stores, and `desired_object` is what you wrote.
 
@@ -152,7 +152,7 @@ output "db_secret_labels" {
 
 ### Optional
 
-- `ignore_fields` (List of String) Field paths to leave out of drift detection, such as `spec.replicas`, `webhooks[0].caBundle` or `metadata.annotations["example.io/hash"]`. A path also covers every field under it. On update, the provider sends the live value of these fields instead of the manifest value.
+- `ignore_fields` (List of String) Field paths to leave out of drift detection, such as `spec.replicas`, `webhooks[0].caBundle` or `metadata.annotations["example.io/hash"]`. A path also covers every field under it. On update, the provider sends the live value of these fields instead of the manifest value, and leaves out map keys the server does not have. Array elements the server does not have are still sent from the manifest, because removing one would shift the elements after it. So that people reading the object can see which fields Terraform leaves alone, the provider writes these paths as a JSON array to the `terraform.arcane.pubg.io/ignore-fields` annotation, unless the manifest sets that annotation. Like the managed-by label, the annotation is put back on the next apply when it is removed on the server, is removed when `ignore_fields` becomes empty, and does not appear in `desired_object`. The provider keeps managing the annotation even when `ignore_fields` covers `metadata.annotations`; list the annotation's own path, `metadata.annotations["terraform.arcane.pubg.io/ignore-fields"]`, in `ignore_fields` to leave it alone. Objects that already use `ignore_fields` get one update after upgrading the provider to add the annotation.
 - `sensitive_fields` (List of String) Field paths to treat as secret in addition to the fields the API server reports as encrypted, using the same syntax as `ignore_fields`, such as `spec.items[0].token` or `data["key"]`. A path also covers every field under it. Their values read `******` in `desired_object` and `object`.
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `wait` (Block, Optional) Conditions to wait for after the object is created or updated, bounded by the create and update timeouts. (see [below for nested schema](#nestedblock--wait))
