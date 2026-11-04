@@ -35,7 +35,9 @@ spec:
   scope: all
 YAML
 
-    sensitive_fields = ["status.token"]
+    sensitive_fields {
+      json_pointers = ["/status/token"]
+    }
   }
 }
 
@@ -65,4 +67,12 @@ resource "terraform_data" "index" {
 
 - `body` (String) YAML of the command object. Pass secrets with sensitive values; this attribute is shown in plan otherwise. When it is empty or has no `kind`, the provider sends the command kind that API discovery lists. It does not fill `apiVersion`. Arcane API servers that do not yet accept a command body without `apiVersion` reject it with 422, so write `apiVersion` in the body for them. When the command fails, string values from `body` that the server repeats in its error are shown as `******`.
 - `namespace` (String) Namespace of the resource kind. Required for a namespaced kind, and not allowed for a cluster-scoped one.
-- `sensitive_fields` (List of String) Field paths of the response to read as `******` in the progress message, using the same syntax as `ignore_fields` of `arcane_api_resource`, such as `status.token`. A path also covers every field under it.
+- `sensitive_fields` (Block, Optional) Fields of the response to read as `******` in the progress message. A selected field also covers every field under it. When a jq expression fails to evaluate, every value of the response except `apiVersion`, `kind`, `metadata.name` and `metadata.namespace` reads `******`, with a warning. (see [below for nested schema](#nestedblock--sensitive_fields))
+
+<a id="nestedblock--sensitive_fields"></a>
+### Nested Schema for `sensitive_fields`
+
+Optional:
+
+- `jq_path_expressions` (List of String) jq path expressions that select the fields, such as `.spec.integrations[] | select(.type == "slack") | .token`. Each expression has one second to evaluate.
+- `json_pointers` (List of String) JSON Pointers (RFC 6901) of the fields, such as `/data/password`. A pointer to a field the object does not have selects nothing.

@@ -8,15 +8,15 @@ description: |-
 
 # arcane_api_resource (Resource)
 
-Manages an Arcane API object from a YAML manifest. The provider adds the `terraform.arcane.pubg.io/managed-by: terraform` label when it creates or updates the object, unless the manifest sets that label. When the label is removed on the server, refresh reports it as drift and the next apply puts it back. It does not appear in `desired_object`. The provider keeps managing the label even when `ignore_fields` covers `metadata.labels`; list the label's own path, `metadata.labels["terraform.arcane.pubg.io/managed-by"]`, in `ignore_fields` to leave it alone.
+Manages an Arcane API object from a YAML manifest. The provider adds the `terraform.arcane.pubg.io/managed-by: terraform` label when it creates or updates the object, unless the manifest sets that label. When the label is removed on the server, refresh reports it as drift and the next apply puts it back. It does not appear in `desired_object`. The provider keeps managing the label even when `ignore_differences` selects it or a field above it, such as `metadata.labels`.
 
-`manifest` is always sensitive, so plans show manifest changes in `desired_object`, where secret fields read `******`. Secret fields are the fields the API server reports as encrypted through API discovery, plus `sensitive_fields` for secret fields the server does not know about. `object` is what the server actually stores, and `desired_object` is what you wrote.
+`manifest` is always sensitive, so plans show manifest changes in `desired_object`, where secret fields read `******`. Secret fields are the fields the API server reports as encrypted through API discovery, plus the fields `sensitive_fields` selects for secret fields the server does not know about. `object` is what the server actually stores, and `desired_object` is what you wrote.
 
-~> Terraform does not tell the provider which values are sensitive. A sensitive value placed in a field that the server does not report as encrypted shows in plain text in `desired_object` unless its path is listed in `sensitive_fields`. Provider versions without `desired_object` hid the whole manifest, so check existing configurations for such values before upgrading.
+~> Terraform does not tell the provider which values are sensitive. A sensitive value placed in a field that the server does not report as encrypted shows in plain text in `desired_object` unless `sensitive_fields` selects that field. Provider versions without `desired_object` hid the whole manifest, so check existing configurations for such values before upgrading.
 
 For an airdrop `Secret`, write values under `data` instead of `stringData`. The server does not store `stringData`, so it shows up as drift on every plan.
 
-For a kind with encrypted fields, the provider reads their plaintext through the `<plural>/reveal` subresource, so the token needs `get` on `<plural>/reveal`. Only kinds with encrypted fields need it. Without it, encrypted values are not compared for drift, and an update fails when `ignore_fields` covers an encrypted field. Drift on a secret field shows only its path, such as `data.password: changed`.
+For a kind with encrypted fields, the provider reads their plaintext through the `<plural>/reveal` subresource, so the token needs `get` on `<plural>/reveal`. Only kinds with encrypted fields need it. Without it, encrypted values are not compared for drift, and an update fails when an `ignore_differences` block with `respect_on_apply` selects an encrypted field. Drift on a secret field shows only its path, such as `data.password: changed`.
 
 After upgrading from a provider version without `desired_object`, the first plan fills it during refresh. A plan with `-refresh=false` skips that, so it can show one in-place update with no other change.
 
@@ -69,10 +69,17 @@ YAML
 
 # Leave fields that a controller changes out of drift detection, and wait until the object is ready
 resource "arcane_api_resource" "with_wait" {
-  ignore_fields = [
-    "spec.replicas",
-    "metadata.annotations[\"example.io/last-synced\"]",
-  ]
+  # An autoscaler changes replicas, so keep the server's value on update as well.
+  ignore_differences {
+    json_pointers    = ["/spec/replicas"]
+    respect_on_apply = true
+  }
+
+  # Hide a sidecar a controller adds, and the fields that controller owns, from the diff only.
+  ignore_differences {
+    jq_path_expressions     = [".spec.containers[] | select(.name == \"sidecar\")"]
+    managed_fields_managers = ["worker-controller"]
+  }
 
   manifest = <<-YAML
 apiVersion: example.pubg.io/v1
@@ -90,8 +97,8 @@ YAML
       status = "True"
     }
     field {
-      key   = "status.phase"
-      value = "Running"
+      jq_path_expression = ".status.phase"
+      value              = "Running"
     }
   }
 }
@@ -117,10 +124,10 @@ YAML
 
 # Mark secret fields the API server does not report as encrypted
 resource "arcane_api_resource" "with_sensitive_fields" {
-  sensitive_fields = [
-    "spec.items[0].token",
-    "spec.credentials",
-  ]
+  sensitive_fields {
+    json_pointers       = ["/spec/credentials"]
+    jq_path_expressions = [".spec.items[] | select(.type == \"slack\") | .token"]
+  }
 
   manifest = <<-YAML
 apiVersion: example.pubg.io/v1
@@ -130,7 +137,8 @@ metadata:
   namespace: default
 spec:
   items:
-  - token: ${data.vault_kv_secret_v2.db.data["token"]}
+  - type: slack
+    token: ${data.vault_kv_secret_v2.db.data["token"]}
   credentials:
     user: app
     password: ${data.vault_kv_secret_v2.db.data["password"]}
@@ -152,17 +160,37 @@ output "db_secret_labels" {
 
 ### Optional
 
-- `ignore_fields` (List of String) Field paths to leave out of drift detection, such as `spec.replicas`, `webhooks[0].caBundle` or `metadata.annotations["example.io/hash"]`. A path also covers every field under it. On update, the provider sends the live value of these fields instead of the manifest value, and leaves out map keys the server does not have. Array elements the server does not have are still sent from the manifest, because removing one would shift the elements after it. So that people reading the object can see which fields Terraform leaves alone, the provider writes these paths as a JSON array to the `terraform.arcane.pubg.io/ignore-fields` annotation, unless the manifest sets that annotation. Like the managed-by label, the annotation is put back on the next apply when it is removed on the server, is removed when `ignore_fields` becomes empty, and does not appear in `desired_object`. The provider keeps managing the annotation even when `ignore_fields` covers `metadata.annotations`; list the annotation's own path, `metadata.annotations["terraform.arcane.pubg.io/ignore-fields"]`, in `ignore_fields` to leave it alone. Objects that already use `ignore_fields` get one update after upgrading the provider to add the annotation.
-- `sensitive_fields` (List of String) Field paths to treat as secret in addition to the fields the API server reports as encrypted, using the same syntax as `ignore_fields`, such as `spec.items[0].token` or `data["key"]`. A path also covers every field under it. Their values read `******` in `desired_object` and `object`.
+- `ignore_differences` (Block List) Fields to leave out of drift detection, like `ignoreDifferences` of an Argo CD Application. Each block selects fields with `json_pointers`, `jq_path_expressions` and `managed_fields_managers`, and must select at least one. The provider resolves the selectors on the manifest and on the server's object separately, removes the selected fields from each, and compares what remains. So a field only the server has, such as a sidecar container a controller adds, can be left out without matching array indexes. A selected field also covers every field under it, and a map left empty by the removal is removed too, so a map holding only ignored keys is not drift when the server does not have it. A jq expression that fails to evaluate on an object selects nothing on that object. A manager whose entries in `metadata.managedFields` cannot be parsed selects nothing. A selector that resolves to the whole object, such as the jq expression `.`, is ignored. On update, the provider sends the manifest as written unless `respect_on_apply` is set, so an ignored field takes the manifest value and an ignored field only the server has is removed. When nothing else differs and the manifest is unchanged, the provider does not update the object, so changes on the server limited to ignored fields stay. When several blocks select the same field and one of them sets `respect_on_apply`, the provider keeps the server's value. So that people reading the object can see which fields Terraform leaves alone, the provider writes the blocks as a JSON array to the `terraform.arcane.pubg.io/ignore-differences` annotation, unless the manifest sets that annotation. Like the managed-by label, the annotation is put back on the next apply when it is removed on the server, is removed when no block is left, and does not appear in `desired_object`. The provider always compares the managed-by label and this annotation, even when a block selects them or a field above them. (see [below for nested schema](#nestedblock--ignore_differences))
+- `sensitive_fields` (Block, Optional) Fields to treat as secret in addition to the fields the API server reports as encrypted. A selected field also covers every field under it. Their values read `******` in `desired_object` and `object`. The provider runs the jq expressions on the manifest at plan time to compute `desired_object`, and on the server's object to compute `object`. When a jq expression fails to evaluate on an object, every value of that object except `apiVersion`, `kind`, `metadata.name` and `metadata.namespace` reads `******`, with a warning. (see [below for nested schema](#nestedblock--sensitive_fields))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
 - `wait` (Block, Optional) Conditions to wait for after the object is created or updated, bounded by the create and update timeouts. (see [below for nested schema](#nestedblock--wait))
 
 ### Read-Only
 
-- `desired_object` (Dynamic) The manifest as written, as an object value, with secret fields replaced by `******`. Secret fields are the encrypted fields reported by API discovery plus `sensitive_fields`. Other fields show in plain text even when their value comes from a sensitive variable or attribute. Computed at plan time, and unknown while the manifest is unknown. Reference fields such as `desired_object.spec.replicas`.
-- `drift` (String) Fields written in the manifest whose live value differs, one per line. Empty when they match. A non-empty value makes the next plan update the object back to the manifest. Property subresources reported by API discovery, such as `status`, are not compared because controllers write them.
+- `desired_object` (Dynamic) The manifest as written, as an object value, with secret fields replaced by `******`. Secret fields are the encrypted fields reported by API discovery plus the fields `sensitive_fields` selects. Other fields show in plain text even when their value comes from a sensitive variable or attribute. Computed at plan time, and unknown while the manifest is unknown. Reference fields such as `desired_object.spec.replicas`.
+- `drift` (String) Fields written in the manifest whose live value differs, one per line. Empty when they match. A non-empty value makes the next plan update the object back to the manifest. Array indexes count the elements left after removing the fields `ignore_differences` selects. Property subresources reported by API discovery, such as `status`, are not compared because controllers write them.
 - `id` (String) API path of the resource
-- `object` (String) Resource object returned by the API server, as JSON. It is what the server actually stores. The server returns encrypted fields as `******`, and the provider also replaces `sensitive_fields` with `******`.
+- `object` (String) Resource object returned by the API server, as JSON. It is what the server actually stores. The server returns encrypted fields as `******`, and the provider also replaces the fields `sensitive_fields` selects with `******`.
+
+<a id="nestedblock--ignore_differences"></a>
+### Nested Schema for `ignore_differences`
+
+Optional:
+
+- `jq_path_expressions` (List of String) jq path expressions that select the fields, such as `.spec.integrations[] | select(.type == "slack") | .token`. Each expression has one second to evaluate.
+- `json_pointers` (List of String) JSON Pointers (RFC 6901) of the fields, such as `/data/password`. A pointer to a field the object does not have selects nothing.
+- `managed_fields_managers` (List of String) Field manager names, such as `pet-controller`. The fields a manager owns in `metadata.managedFields` of the server's object are removed from both the manifest and the server's object. Unlike Argo CD, which ignores only owned fields that both sides have, an owned field is ignored even when the manifest leaves it out. An array element or map that a manager owns together with fields under it, such as a sidecar container a controller adds, is ignored whole when only the server has it. When the manifest has it too, only the fields under it that the manager owns are ignored. When an update sends a different value for an owned field, the API server moves the field's ownership to the provider, and the field is not ignored again until that manager writes it. An update that leaves the value unchanged keeps the ownership.
+- `respect_on_apply` (Boolean) Whether an update sends the server's values of the fields this block selects instead of the manifest values, like the `RespectIgnoreDifferences=true` sync option of Argo CD. Defaults to `false`. A selected field the server does not have is left out. A selected array element only the server has, such as a sidecar container, stays at its index on the server, and the manifest's other elements fill the remaining places in order. For a JSON Pointer or a jq expression, such an element inside another array element is left out, because its index on the server may point at a different element of the manifest. A field inside an element is matched to the manifest's element by the same JSON Pointer, by the keys in `metadata.managedFields` for a manager, and by the order of results for a jq expression. When a jq expression selects fields on both the manifest and the server's object, and on either of them selects several fields that differ only in array indexes, such as `.spec.containers[].resources`, `respect_on_apply` skips the expression and sends the manifest values for its fields, with a warning. So a jq expression should select one element, as `select(.name == "app")` does. A field inside an element the manifest does not have is left out, and so is an element a manager owns in an array the manifest's element does not have. When a selected field is an encrypted field, the provider reads its value through the `<plural>/reveal` subresource.
+
+
+<a id="nestedblock--sensitive_fields"></a>
+### Nested Schema for `sensitive_fields`
+
+Optional:
+
+- `jq_path_expressions` (List of String) jq path expressions that select the fields, such as `.spec.integrations[] | select(.type == "slack") | .token`. Each expression has one second to evaluate.
+- `json_pointers` (List of String) JSON Pointers (RFC 6901) of the fields, such as `/data/password`. A pointer to a field the object does not have selects nothing.
+
 
 <a id="nestedblock--timeouts"></a>
 ### Nested Schema for `timeouts`
@@ -197,9 +225,10 @@ Required:
 
 Required:
 
-- `key` (String) Field path, such as status.phase.
 - `value` (String) Value to wait for.
 
 Optional:
 
+- `jq_path_expression` (String) jq expression that selects the fields, such as .status.replicas[].ready. Every selected field must have the value. Exactly one of `json_pointer` and `jq_path_expression`.
+- `json_pointer` (String) JSON Pointer to the field, such as /status/phase. Exactly one of `json_pointer` and `jq_path_expression`.
 - `value_type` (String) How to compare the value: eq (default) or regex.

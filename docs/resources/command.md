@@ -5,7 +5,7 @@ subcategory: ""
 description: |-
   Runs an Arcane command once and keeps its result in state. A command is an action that a resource kind defines, run with POST <collection>/<command>.
   The command runs on create. Changing any input other than sensitive_fields, including triggers, replaces the resource and runs the command again. Changing only sensitive_fields updates desired_object in place without running the command. When the provider gets no response to the command request, it cannot tell whether the command ran, so the next apply runs it again; a command that must not run twice needs the API server to deduplicate requests. Refresh does not contact the server and destroy only removes the state, because commands have no read or delete API. The token needs the RBAC commands permission <plural>/<command>.
-  body and object are sensitive, so plans show the body changes in desired_object, where sensitive_fields read ******.
+  body and object are sensitive, so plans show the body changes in desired_object, where the fields sensitive_fields selects read ******.
 ---
 
 # arcane_command (Resource)
@@ -14,7 +14,7 @@ Runs an Arcane command once and keeps its result in state. A command is an actio
 
 The command runs on create. Changing any input other than `sensitive_fields`, including `triggers`, replaces the resource and runs the command again. Changing only `sensitive_fields` updates `desired_object` in place without running the command. When the provider gets no response to the command request, it cannot tell whether the command ran, so the next apply runs it again; a command that must not run twice needs the API server to deduplicate requests. Refresh does not contact the server and destroy only removes the state, because commands have no read or delete API. The token needs the RBAC `commands` permission `<plural>/<command>`.
 
-`body` and `object` are sensitive, so plans show the body changes in `desired_object`, where `sensitive_fields` read `******`.
+`body` and `object` are sensitive, so plans show the body changes in `desired_object`, where the fields `sensitive_fields` selects read `******`.
 
 ## Example Usage
 
@@ -37,8 +37,10 @@ spec:
   signingKey: ${var.signing_key}
 YAML
 
-  # Read these paths as "******" in desired_object, where a plan shows body changes
-  sensitive_fields = ["spec.signingKey"]
+  # Read these fields as "******" in desired_object, where a plan shows body changes
+  sensitive_fields {
+    json_pointers = ["/spec/signingKey"]
+  }
 
   triggers = {
     rotation = "2026-10"
@@ -58,7 +60,9 @@ spec:
 YAML
 
   # The server does not encrypt spec.token, so mask it in desired_object
-  sensitive_fields = ["spec.token"]
+  sensitive_fields {
+    json_pointers = ["/spec/token"]
+  }
 }
 ```
 
@@ -75,11 +79,19 @@ YAML
 
 - `body` (String, Sensitive) YAML of the command object. Always sensitive; see `desired_object` for its changes. When it is empty or has no `kind`, the provider sends the command kind that API discovery lists. It does not fill `apiVersion`. Arcane API servers that do not yet accept a command body without `apiVersion` reject it with 422, so write `apiVersion` in the body for them. When the command fails, string values from `body` that the server repeats in its error are shown as `******`.
 - `namespace` (String) Namespace of the resource kind. Required for a namespaced kind, and not allowed for a cluster-scoped one.
-- `sensitive_fields` (List of String) Field paths of the command object to read as `******` in `desired_object`, using the same syntax as `ignore_fields` of `arcane_api_resource`, such as `spec.token`. A path also covers every field under it. Changing it does not run the command again.
+- `sensitive_fields` (Block, Optional) Fields of the command object to read as `******` in `desired_object`. A selected field also covers every field under it. Changing it does not run the command again. The provider runs the jq expressions on the body at plan time to compute `desired_object`. When a jq expression fails to evaluate, every value of the command object except `apiVersion`, `kind`, `metadata.name` and `metadata.namespace` reads `******`, with a warning. (see [below for nested schema](#nestedblock--sensitive_fields))
 - `triggers` (Map of String) Values that run the command again when they change, like `triggers_replace` of `terraform_data`.
 
 ### Read-Only
 
-- `desired_object` (Dynamic) The command object the provider sends, as an object value, with `sensitive_fields` replaced by `******`. Computed at plan time, and unknown while an input is unknown.
+- `desired_object` (Dynamic) The command object the provider sends, as an object value, with the fields `sensitive_fields` selects replaced by `******`. Computed at plan time, and unknown while an input is unknown.
 - `id` (String) API path the command was sent to
 - `object` (String, Sensitive) Command object the server returned, as JSON, exactly as received. Always sensitive. Read a result with `jsondecode(arcane_command.x.object)`.
+
+<a id="nestedblock--sensitive_fields"></a>
+### Nested Schema for `sensitive_fields`
+
+Optional:
+
+- `jq_path_expressions` (List of String) jq path expressions that select the fields, such as `.spec.integrations[] | select(.type == "slack") | .token`. Each expression has one second to evaluate.
+- `json_pointers` (List of String) JSON Pointers (RFC 6901) of the fields, such as `/data/password`. A pointer to a field the object does not have selects nothing.

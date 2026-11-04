@@ -1,2 +1,2 @@
 ## Changelog   
-* d5373a5f720e0cc2526a62a877c0d31b2ab4409f feat: arcane_api_resource 의 ignore_fields 를 표시하는 annotation 추가 (!11)
+* e7e8c623e421e9a294666130d2cebf762cc9fe96 feat: 필드를 JSON Pointer·jq 식으로 고르도록 바꾸고 ignore_fields 를 ignore_differences 로 변경 (!12)
