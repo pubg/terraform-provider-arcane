@@ -1,2 +1,2 @@
 ## Changelog   
-* e7e8c623e421e9a294666130d2cebf762cc9fe96 feat: 필드를 JSON Pointer·jq 식으로 고르도록 바꾸고 ignore_fields 를 ignore_differences 로 변경 (!12)
+* a48d3f3c137db85daaf39a0f57a851dfe9309742 feat!: arcane_api_resource의 반환값 개선 (!13)

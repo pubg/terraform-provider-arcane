@@ -47,7 +47,7 @@ YAML
   }
 }
 
-# The result is the server response as JSON and is sensitive
+# The result is the server response as an object value and is sensitive
 resource "arcane_api_resource" "uses_token" {
   manifest = <<-YAML
 apiVersion: sample.arcane.pubg.io/v1
@@ -56,7 +56,7 @@ metadata:
   name: consumer
   namespace: default
 spec:
-  token: ${jsondecode(arcane_command.issue_token.object).status.token}
+  token: ${arcane_command.issue_token.object.status.token}
 YAML
 
   # The server does not encrypt spec.token, so mask it in desired_object
@@ -86,7 +86,7 @@ YAML
 
 - `desired_object` (Dynamic) The command object the provider sends, as an object value, with the fields `sensitive_fields` selects replaced by `******`. Computed at plan time, and unknown while an input is unknown.
 - `id` (String) API path the command was sent to
-- `object` (String, Sensitive) Command object the server returned, as JSON, exactly as received. Always sensitive. Read a result with `jsondecode(arcane_command.x.object)`.
+- `object` (Dynamic, Sensitive) Command object the server returned, as an object value, as received. Always sensitive. Read a result with `arcane_command.x.object.status`. Earlier provider versions stored it as a JSON string, so replace `jsondecode(arcane_command.x.object)` with direct references.
 
 <a id="nestedblock--sensitive_fields"></a>
 ### Nested Schema for `sensitive_fields`

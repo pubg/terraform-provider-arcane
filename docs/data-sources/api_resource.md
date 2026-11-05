@@ -46,7 +46,7 @@ data "arcane_api_resources" "role" {
 ### Read-Only
 
 - `id` (String) API path of the resource
-- `object` (String) Resource object returned by the API server
+- `object` (Dynamic) Resource object returned by the API server, as an object value. Unlike `live_object` of the `arcane_api_resource` resource, it keeps `metadata.managedFields`, `metadata.resourceVersion`, `metadata.updateTimestamp` and `metadata.generation`. Earlier provider versions returned a JSON string, so replace `jsondecode(data.arcane_api_resource.x.object)` with direct references such as `data.arcane_api_resource.x.object.metadata.name`.
 
 <a id="nestedblock--timeouts"></a>
 ### Nested Schema for `timeouts`

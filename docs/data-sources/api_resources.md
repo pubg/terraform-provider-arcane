@@ -43,7 +43,7 @@ data "arcane_api_resources" "pod" {
 ### Read-Only
 
 - `id` (String) API path of the resource list
-- `objects` (List of String) List of resource objects as YAML strings
+- `objects` (Dynamic) Resource objects returned by the API server, as a tuple of object values. Unlike `live_object` of the `arcane_api_resource` resource, they keep `metadata.managedFields`, `metadata.resourceVersion`, `metadata.updateTimestamp` and `metadata.generation`. Earlier provider versions returned a list of YAML strings, so replace `yamldecode(...)` with direct references such as `data.arcane_api_resources.x.objects[0].metadata.name`.
 
 <a id="nestedblock--timeouts"></a>
 ### Nested Schema for `timeouts`

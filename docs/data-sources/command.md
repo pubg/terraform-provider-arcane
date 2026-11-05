@@ -25,7 +25,7 @@ data "arcane_command" "pet_summary" {
 }
 
 output "pet_count" {
-  value     = jsondecode(data.arcane_command.pet_summary.object).status.count
+  value     = data.arcane_command.pet_summary.object.status.count
   sensitive = true
 }
 ```
@@ -48,7 +48,7 @@ output "pet_count" {
 ### Read-Only
 
 - `id` (String) API path the command was sent to
-- `object` (String, Sensitive) Command object the server returned, as JSON, exactly as received. Always sensitive. Read a result with `jsondecode(data.arcane_command.x.object)`.
+- `object` (Dynamic, Sensitive) Command object the server returned, as an object value, as received. Always sensitive. Read a result with `data.arcane_command.x.object.status`. Earlier provider versions returned a JSON string, so replace `jsondecode(data.arcane_command.x.object)` with direct references.
 
 <a id="nestedblock--timeouts"></a>
 ### Nested Schema for `timeouts`
