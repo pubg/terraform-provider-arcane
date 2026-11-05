@@ -32,10 +32,12 @@ Earlier provider versions stored the server's object in `object` as a JSON strin
 - The `drift` attribute is removed. Drift shows in the plan as the diff of `live_object`.
 - `live_object` no longer has `metadata.resourceVersion`, `metadata.updateTimestamp` and `metadata.generation`. To read them, or `metadata.managedFields`, use `data.arcane_api_resource`, whose `object` keeps every field the server returns.
 - `data.arcane_api_resources` returns `objects` as a list (tuple) of objects instead of YAML strings, and `data.arcane_api_resource`, `arcane_command` and `data.arcane_command` return `object` as an object value. Reference their fields directly, too.
-- `ignore_differences` no longer has `respect_on_apply`. Delete the argument from your configurations. Every field `ignore_differences` selects now keeps the server's value on update, like `ignore_changes` of the `lifecycle` block. A block that left `respect_on_apply` unset or `false` used to send the manifest values of its fields, so its first plan after upgrading shows an update that rewrites the `terraform.arcane.pubg.io/ignore-differences` annotation.
-- A block that selects an encrypted field now needs `get` on `<plural>/reveal` for every update, which only blocks with `respect_on_apply = true` needed before. Without it, the update fails with `Failed to reveal ignored encrypted fields`.
+- Every field `ignore_differences` selects now keeps the server's value on update, like `ignore_changes` of the `lifecycle` block. The first plan after upgrading shows an update that only rewrites the `terraform.arcane.pubg.io/ignore-differences` annotation for every resource with `ignore_differences`, unless its manifest sets that annotation.
+- A block that selects an encrypted field now needs `get` on `<plural>/reveal` for every update. Without it, the update fails with `Failed to reveal ignored encrypted fields`.
 - The plan sends a dry run, so the token that runs `terraform plan` needs `update` on each kind.
 - The first plan after upgrading can show fields that other tools added on the server as drift. Check the `live_object` diff before applying, and keep such fields with `ignore_differences`.
+
+After upgrading from v1.0.0, the first plan shows an update that only rewrites the `terraform.arcane.pubg.io/ignore-differences` annotation for every resource with `ignore_differences`, unless its manifest sets that annotation.
 
 ## Example Usage
 

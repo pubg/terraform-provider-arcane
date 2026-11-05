@@ -1,2 +1,2 @@
 ## Changelog   
-* a48d3f3c137db85daaf39a0f57a851dfe9309742 feat!: arcane_api_resource의 반환값 개선 (!13)
+* ed991cd0e852f1809c33fe726f1e0f72228205c4 fix: ignore-differences annotation 에서 respectOnApply 키 제거 (!14)
