@@ -1,2 +1,2 @@
 ## Changelog   
-* ed991cd0e852f1809c33fe726f1e0f72228205c4 fix: ignore-differences annotation 에서 respectOnApply 키 제거 (!14)
+* 51af02df241e75a603417145ec24d3cbb6f5c279 feat: custom subresource 를 다루는 arcane_api_subresource 추가 (!16)
