@@ -121,6 +121,44 @@ YAML
   }
 }
 
+# Wait until the controller reports this spec as ready, and fail as soon as it reports a failure
+resource "arcane_api_resource" "wait_for_ready" {
+  manifest = <<-YAML
+apiVersion: example.pubg.io/v1
+kind: Connector
+metadata:
+  name: connector
+  namespace: default
+spec:
+  replicas: 3
+YAML
+
+  wait {
+    # A condition left from an earlier generation is ignored, as kubectl wait does.
+    condition {
+      type   = "Ready"
+      status = "True"
+    }
+    # Ends the apply with an error without waiting for the timeout.
+    condition {
+      type    = "Ready"
+      status  = "False"
+      reason  = "Failed"
+      failure = true
+    }
+    # Compares two fields of the same object.
+    field {
+      json_pointer       = "/status/readyReplicas"
+      value_json_pointer = "/spec/replicas"
+    }
+  }
+
+  timeouts {
+    create = "2h"
+    update = "2h"
+  }
+}
+
 data "vault_kv_secret_v2" "db" {
   mount = "kv"
   name  = "qa/db"
@@ -181,7 +219,7 @@ output "db_secret_labels" {
 - `ignore_differences` (Block List) Fields to leave out of drift detection and to keep at the server's values on update, like `ignore_changes` of the `lifecycle` block, or `ignoreDifferences` of an Argo CD Application with the `RespectIgnoreDifferences=true` sync option. Each block selects fields with `json_pointers`, `jq_path_expressions` and `managed_fields_managers`, and must select at least one. The provider resolves the selectors on the manifest and on the server's object separately, removes the selected fields from each, and compares what remains. So a field only the server has, such as a sidecar container a controller adds, can be left out without matching array indexes. A selected field also covers every field under it, and a map left empty by the removal is removed too, so a map holding only ignored keys is not drift when the server does not have it. A jq expression that fails to evaluate on an object selects nothing on that object. A manager whose entries in `metadata.managedFields` cannot be parsed selects nothing. A selector that resolves to the whole object, such as the jq expression `.`, is ignored. Create sends the manifest as written. An update sends the server's values of the selected fields instead of the manifest values, and leaves out a selected field the server does not have. A selected array element only the server has, such as a sidecar container, stays at its index on the server, and the manifest's other elements fill the remaining places in order. For a JSON Pointer or a jq expression, such an element inside another array element is left out, because its index on the server may point at a different element of the manifest. A field inside an element is matched to the manifest's element by the same JSON Pointer, by the keys in `metadata.managedFields` for a manager, and by the order of results for a jq expression. When a jq expression selects fields on both the manifest and the server's object, and on either of them selects several fields that differ only in array indexes, such as `.spec.containers[].resources`, the update skips the expression and sends the manifest values for its fields, with a warning. So a jq expression should select one element, as `select(.name == "app")` does. A field inside an element the manifest does not have is left out, and so is an element a manager owns in an array the manifest's element does not have. When a selected field is an encrypted field, the provider reads its value through the `<plural>/reveal` subresource. The plan shows the selected fields with their values in the state. When one of them changes on the server between plan and apply, apply stops without updating the object and asks you to plan again. When nothing else differs and the manifest is unchanged, the provider does not update the object, so changes on the server limited to ignored fields stay. So that people reading the object can see which fields Terraform leaves alone, the provider writes the blocks as a JSON array to the `terraform.arcane.pubg.io/ignore-differences` annotation, unless the manifest sets that annotation. Like the managed-by label, the annotation is put back on the next apply when it is removed on the server, is removed when no block is left, and does not appear in `desired_object`. The provider always compares the managed-by label and this annotation, even when a block selects them or a field above them. (see [below for nested schema](#nestedblock--ignore_differences))
 - `sensitive_fields` (Block, Optional) Fields to treat as secret in addition to the fields the API server reports as encrypted. A selected field also covers every field under it. Their values read `******` in `desired_object` and `live_object`. The provider runs the jq expressions on the manifest at plan time to compute `desired_object`, and on the server's object to compute `live_object`. When a jq expression fails to evaluate on an object, every value of that object except `apiVersion`, `kind`, `metadata.name` and `metadata.namespace` reads `******`, with a warning. (see [below for nested schema](#nestedblock--sensitive_fields))
 - `timeouts` (Block, Optional) (see [below for nested schema](#nestedblock--timeouts))
-- `wait` (Block, Optional) Conditions to wait for after the object is created or updated, bounded by the create and update timeouts. (see [below for nested schema](#nestedblock--wait))
+- `wait` (Block, Optional) Conditions to wait for after the object is created or updated, bounded by the create and update timeouts. Every `condition` and `field` must match, except those with `failure = true`: waiting ends with an error as soon as one of those matches. As `kubectl wait` does, a condition left from an earlier generation counts as not reported: the provider compares the condition's `observedGeneration`, or `status.observedGeneration` when the condition has none, with `metadata.generation`. An object that reports neither is not checked. A `field` is not checked this way; compare it with `metadata.generation` through `value_json_pointer` when needed. (see [below for nested schema](#nestedblock--wait))
 
 ### Read-Only
 
@@ -224,8 +262,8 @@ Optional:
 
 Optional:
 
-- `condition` (Block List) An entry in `status.conditions` that must have this status. (see [below for nested schema](#nestedblock--wait--condition))
-- `field` (Block List) A field that must have this value. Values that are not strings are compared as JSON. (see [below for nested schema](#nestedblock--wait--field))
+- `condition` (Block List) An entry in `status.conditions` to compare by `type`. (see [below for nested schema](#nestedblock--wait--condition))
+- `field` (Block List) A field to compare with a value. Values that are not strings are compared as JSON. (see [below for nested schema](#nestedblock--wait--field))
 
 <a id="nestedblock--wait--condition"></a>
 ### Nested Schema for `wait.condition`
@@ -235,16 +273,20 @@ Required:
 - `status` (String) Condition status, such as True.
 - `type` (String) Condition type, such as Ready.
 
+Optional:
+
+- `failure` (Boolean) Fail the apply as soon as this rule matches, without waiting for the timeout. Rules without it must all match for the wait to end.
+- `reason` (String) Condition reason. Any reason matches when omitted.
+
 
 <a id="nestedblock--wait--field"></a>
 ### Nested Schema for `wait.field`
 
-Required:
-
-- `value` (String) Value to wait for.
-
 Optional:
 
-- `jq_path_expression` (String) jq expression that selects the fields, such as .status.replicas[].ready. Every selected field must have the value. Exactly one of `json_pointer` and `jq_path_expression`.
+- `failure` (Boolean) Fail the apply as soon as this rule matches, without waiting for the timeout. Rules without it must all match for the wait to end.
+- `jq_path_expression` (String) jq expression that selects the fields, such as .status.replicas[].ready. Every selected field must have the value, or any of them when `failure` is set. Exactly one of `json_pointer` and `jq_path_expression`.
 - `json_pointer` (String) JSON Pointer to the field, such as /status/phase. Exactly one of `json_pointer` and `jq_path_expression`.
+- `value` (String) Value to compare with. Exactly one of `value` and `value_json_pointer`.
+- `value_json_pointer` (String) JSON Pointer to another field of the same object to compare with, instead of `value`, such as `/metadata/generation`. The rule does not match while that field is not set. Cannot be used with `value_type = "regex"`. Exactly one of `value` and `value_json_pointer`.
 - `value_type` (String) How to compare the value: eq (default) or regex.
